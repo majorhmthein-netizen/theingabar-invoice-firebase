@@ -1,19 +1,86 @@
 rules_version = '2';
-// Theingabar Invoice — Firestore rules (v1, no Firebase Auth yet).
+// Theingabar Invoice — Firestore rules (v2, Firebase Auth enforced).
 //
-// validation: date/customer present, 1-20 items, every item a
-// (desc: string, amount: int >= 0), total an int >= 0 and total
-// EXACTLY equal to the sum of the item amounts. The sum check is
-// written out as an explicit disjunction because security rules
-// have no loops or reduce.
-// Reads (get/list) are open in v1: anyone who knows the URL can
-// read the log. v2 should enable Firebase Auth and switch to
-// `allow read, write: if request.auth != null` (plus per-user
-// scoping). Deletes are allowed so the app can remove its own
-// invoices; without Auth there is no way to tell who deletes.
-// Everything outside /invoices is denied.
+// HOW TO DEPLOY (no PC needed, but the console step cannot be done from
+// code): Firebase console -> Firestore Database -> Rules -> paste this
+// whole file -> Publish. Also enable in Authentication -> Sign-in method:
+// Email/Password, Google, and Phone. Authorise the app domain
+// theingabar-invoice-firebase.onrender.com (Authentication -> Settings ->
+// Authorized domains).
+//
+// SECURITY MODEL
+// * Every read/write requires request.auth != null. Unauthenticated
+//   reads are DENIED (v1 had reads open — that is closed here).
+// * Admin is decided ONLY by a REAL, VERIFIED Google sign-in: the
+//   Firebase ID token must have email_verified == true, email in the
+//   admin list below, and sign_in_provider == 'google.com'. A typed
+//   email string, a localStorage value, or a client-side flag can NEVER
+//   satisfy this rule. isAdmin in a user doc is a display marker only
+//   and is NEVER trusted for access.
+// * Mechanics sign in with Firebase Phone Auth (SMS OTP). Their user
+//   doc id is their Firebase Auth uid; the doc's `localId` is the
+//   app-local user id (e.g. "han", "aung") used as invoice.userId.
+// * Invoices: any authenticated user may READ (the Home viewer lists
+//   all users' logs read-only by design). WRITES need the caller to be
+//   the owner (their user doc localId == invoice.userId) AND their user
+//   doc status == "approved" — pending users cannot write. Admin
+//   (verified Google token) can read/write all invoices.
+// * users/{uid}: a user may read any authenticated user's doc (viewer
+//   needs usernames) but may only WRITE their own doc, and only their
+//   own KBZ template / profile fields. They can NEVER set isAdmin,
+//   phoneVerified, or status on their own doc (create or update).
+//   Admin can write any user doc (approve / reject / suspend /
+//   manually verify a phone).
+// * meta/shop (full template metadata): read for authenticated users,
+//   write ONLY for Admin (verified Google token).
+// * Validation (kept from v1): 1-20 items, every item (desc: string,
+//   amount: int >= 0), total an int >= 0 and EXACTLY equal to the sum
+//   of the item amounts (explicit disjunction — rules have no loops).
+//   Invoice `no` must match YYYYMMDD-NNN when present; createdAt may
+//   be a number (client ms) or a timestamp.
+// * Max 5 users is enforced in the app UI, not in rules (rules cannot
+//   count documents). The Admin panel refuses a 6th user.
+//
+// BOOTSTRAP (seed Admin): Han Min Thein signs in with Google
+// (hanmintheinn@gmail.com or majorhmthein@gmail.com) via the hidden
+// long-press login. The verified token satisfies isVerifiedGoogleAdmin(),
+// so the Admin branch of the users create rule allows creating the seed
+// Admin doc with isAdmin: true. A non-admin can never create a doc
+// with isAdmin: true, and can never change their own isAdmin to true.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---- helpers ----
+    function isVerifiedGoogleAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['hanmintheinn@gmail.com', 'majorhmthein@gmail.com']
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function isAuthed() {
+      return request.auth != null;
+    }
+    // The caller's own user doc (doc id == Firebase Auth uid). Returns
+    // null when the caller has no user doc yet (then owner checks fail).
+    function callerDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function callerHasDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function callerLocalId() {
+      return callerDoc().localId;
+    }
+    function callerIsApproved() {
+      return callerHasDoc() && callerDoc().status == 'approved';
+    }
+    function isInvoiceOwner(data) {
+      return callerHasDoc()
+        && data.userId is string
+        && callerLocalId() == data.userId;
+    }
+
+    // ---- invoice validation (v1, plus no / createdAt) ----
     function isValidItem(item) {
       return item is map
         && item.desc is string && item.desc.size() > 0
@@ -70,15 +137,61 @@ service cloud.firestore {
         && data.total is int && data.total >= 0
         && allItemsValid(data.items)
         && totalMatches(data.items, data.total)
-        && (!('uid' in data) || data.uid is string)
-        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && data.uid is string
+        && (!('no' in data) || data.no == null || (data.no is string && data.no.matches('^\\d{8}-\\d{3}$')))
+        && (!('userId' in data) || data.userId == null || data.userId is string)
+        && (!('createdAt' in data) || data.createdAt is int || data.createdAt is timestamp)
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
+
+    // ---- invoices ----
+    // Read: any authenticated user (Home viewer lists all logs read-only).
+    // Write: owner + approved, or Admin (verified Google token). A
+    // pending user (status != "approved") cannot write at all.
     match /invoices/{docId} {
-      allow get, list: if true;
-      allow create, update: if isValidInvoice(request.resource.data);
-      allow delete: if true;
+      allow get, list: if isAuthed();
+      allow create, update: if isValidInvoice(request.resource.data)
+        && (isVerifiedGoogleAdmin()
+          || (isInvoiceOwner(request.resource.data) && callerIsApproved()));
+      allow delete: if isVerifiedGoogleAdmin()
+        || (isInvoiceOwner(resource.data) && callerIsApproved());
     }
+
+    // ---- users ----
+    // Read: any authenticated user (viewer needs usernames). Write: only
+    // the owner, and only their own template/profile fields — isAdmin,
+    // phoneVerified and status can never be set by a non-admin, on
+    // create or on update. Admin (verified Google token) can write any
+    // user doc, including approval and manual phone verification.
+    match /users/{uid} {
+      allow get, list: if isAuthed();
+      allow create: if isVerifiedGoogleAdmin()
+        || (request.auth.uid == uid
+          && request.resource.data.get('isAdmin', false) == false
+          && request.resource.data.get('phoneVerified', false) == false
+          && request.resource.data.get('status', 'pending') == 'pending'
+          && request.resource.data.localId is string);
+      allow update: if isVerifiedGoogleAdmin()
+        || (request.auth.uid == uid
+          && request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false)
+          && request.resource.data.get('phoneVerified', false) == resource.data.get('phoneVerified', false)
+          && request.resource.data.get('status', 'pending') == resource.data.get('status', 'pending')
+          && request.resource.data.get('adminVerifiedBy', null) == resource.data.get('adminVerifiedBy', null)
+          && request.resource.data.get('adminVerifiedAt', null) == resource.data.get('adminVerifiedAt', null)
+          && request.resource.data.get('approvedBy', null) == resource.data.get('approvedBy', null)
+          && request.resource.data.get('approvedAt', null) == resource.data.get('approvedAt', null)
+          && request.resource.data.get('localId', null) == resource.data.get('localId', null)
+          && request.resource.data.get('authUid', null) == resource.data.get('authUid', null));
+      allow delete: if isVerifiedGoogleAdmin();
+    }
+
+    // ---- meta (full template metadata) ----
+    // Read: any authenticated user. Write: Admin only (verified Google).
+    match /meta/{docId} {
+      allow get, list: if isAuthed();
+      allow create, update, delete: if isVerifiedGoogleAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
