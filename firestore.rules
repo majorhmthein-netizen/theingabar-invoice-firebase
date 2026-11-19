@@ -1,0 +1,86 @@
+rules_version = '2';
+// Theingabar Invoice — Firestore rules (v1, no Firebase Auth yet).
+//
+// validation: date/customer present, 1-20 items, every item a
+// (desc: string, amount: int >= 0), total an int >= 0 and total
+// EXACTLY equal to the sum of the item amounts. The sum check is
+// written out as an explicit disjunction because security rules
+// have no loops or reduce.
+// Reads (get/list) are open in v1: anyone who knows the URL can
+// read the log. v2 should enable Firebase Auth and switch to
+// `allow read, write: if request.auth != null` (plus per-user
+// scoping). Deletes are allowed so the app can remove its own
+// invoices; without Auth there is no way to tell who deletes.
+// Everything outside /invoices is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidItem(item) {
+      return item is map
+        && item.desc is string && item.desc.size() > 0
+        && item.amount is int && item.amount >= 0;
+    }
+    function allItemsValid(items) {
+      return (items.size() <= 0 || isValidItem(items[0])) &&
+    (items.size() <= 1 || isValidItem(items[1])) &&
+    (items.size() <= 2 || isValidItem(items[2])) &&
+    (items.size() <= 3 || isValidItem(items[3])) &&
+    (items.size() <= 4 || isValidItem(items[4])) &&
+    (items.size() <= 5 || isValidItem(items[5])) &&
+    (items.size() <= 6 || isValidItem(items[6])) &&
+    (items.size() <= 7 || isValidItem(items[7])) &&
+    (items.size() <= 8 || isValidItem(items[8])) &&
+    (items.size() <= 9 || isValidItem(items[9])) &&
+    (items.size() <= 10 || isValidItem(items[10])) &&
+    (items.size() <= 11 || isValidItem(items[11])) &&
+    (items.size() <= 12 || isValidItem(items[12])) &&
+    (items.size() <= 13 || isValidItem(items[13])) &&
+    (items.size() <= 14 || isValidItem(items[14])) &&
+    (items.size() <= 15 || isValidItem(items[15])) &&
+    (items.size() <= 16 || isValidItem(items[16])) &&
+    (items.size() <= 17 || isValidItem(items[17])) &&
+    (items.size() <= 18 || isValidItem(items[18])) &&
+    (items.size() <= 19 || isValidItem(items[19]));
+    }
+    function totalMatches(items, total) {
+      return (items.size() == 1 && total == items[0].amount) ||
+    (items.size() == 2 && total == items[0].amount + items[1].amount) ||
+    (items.size() == 3 && total == items[0].amount + items[1].amount + items[2].amount) ||
+    (items.size() == 4 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount) ||
+    (items.size() == 5 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount) ||
+    (items.size() == 6 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount) ||
+    (items.size() == 7 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount) ||
+    (items.size() == 8 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount) ||
+    (items.size() == 9 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount) ||
+    (items.size() == 10 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount) ||
+    (items.size() == 11 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount) ||
+    (items.size() == 12 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount) ||
+    (items.size() == 13 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount) ||
+    (items.size() == 14 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount) ||
+    (items.size() == 15 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount) ||
+    (items.size() == 16 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount + items[15].amount) ||
+    (items.size() == 17 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount + items[15].amount + items[16].amount) ||
+    (items.size() == 18 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount + items[15].amount + items[16].amount + items[17].amount) ||
+    (items.size() == 19 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount + items[15].amount + items[16].amount + items[17].amount + items[18].amount) ||
+    (items.size() == 20 && total == items[0].amount + items[1].amount + items[2].amount + items[3].amount + items[4].amount + items[5].amount + items[6].amount + items[7].amount + items[8].amount + items[9].amount + items[10].amount + items[11].amount + items[12].amount + items[13].amount + items[14].amount + items[15].amount + items[16].amount + items[17].amount + items[18].amount + items[19].amount);
+    }
+    function isValidInvoice(data) {
+      return data.date is string && data.date.size() > 0
+        && data.customer is string && data.customer.size() > 0
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 20
+        && data.total is int && data.total >= 0
+        && allItemsValid(data.items)
+        && totalMatches(data.items, data.total)
+        && (!('uid' in data) || data.uid is string)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+    match /invoices/{docId} {
+      allow get, list: if true;
+      allow create, update: if isValidInvoice(request.resource.data);
+      allow delete: if true;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
