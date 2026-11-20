@@ -1,8 +1,9 @@
-/* Theingabar Invoice — service worker. index.html is self-contained (fonts, libraries and QR are inlined), so caching these files makes the app work offline. */
-const CACHE = 'theingabar-firebase-v5';
+/* Theingabar Invoice — service worker. index.html is self-contained (fonts, libraries and QR are inlined); tailwind.css is a local bundled stylesheet. Caching these files makes the app work offline. */
+const CACHE = 'theingabar-firebase-v6';
 const ASSETS = [
   './',
   'index.html',
+  'tailwind.css',
   'manifest.webmanifest',
   'icon-192.png',
   'icon-512.png',
